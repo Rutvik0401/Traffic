@@ -3,18 +3,18 @@ import cv2
 import cvlib as cv
 import threading
 import time
+import pandas as pd
 from cvlib.object_detection import detect_common_objects
 from moviepy.editor import VideoFileClip
 
-def Light(dir,cols1, cols2, cols3):
-    if dir == 'North':
-        sig=['Images/greenN.png','Images/redW.png','Images/redE.png','Images/redS.png']
-    if dir == 'West':
-        sig=['Images/redN.png','Images/greenW.png','Images/redE.png','Images/redS.png']
-    if dir == 'East':
-        sig=['Images/redN.png','Images/redW.png','Images/greenE.png','Images/redS.png']
-    if dir == 'South':
-        sig=['Images/redN.png','Images/redW.png','Images/redE.png','Images/greenS.png']
+def Light(dir, cols1, cols2, cols3):
+    signals = {
+        'North': ['Images/greenN.png', 'Images/redW.png', 'Images/redE.png', 'Images/redS.png'],
+        'West': ['Images/redN.png', 'Images/greenW.png', 'Images/redE.png', 'Images/redS.png'],
+        'East': ['Images/redN.png', 'Images/redW.png', 'Images/greenE.png', 'Images/redS.png'],
+        'South': ['Images/redN.png', 'Images/redW.png', 'Images/redE.png', 'Images/greenS.png']
+    }
+    sig = signals[dir]
     for i, img in enumerate(sig):
         if i == 0:
             cols3[2].image(img, width=80)
@@ -31,19 +31,26 @@ class VideoProcessor(threading.Thread):
         self.video_path = video_path
         self.side = side
         self.car_count = 0
+        self.emergency_present = False
         self.stop_event = threading.Event()
 
     def run(self):
         global k
-        clip=VideoFileClip(self.video_path)
-        cap=clip.subclip(k,k+10)
-        frame_count=0
+        clip = VideoFileClip(self.video_path)
+        cap = clip.subclip(k, k + 10)
+        frame_count = 0
 
         for frame in cap.iter_frames():
-            if(frame_count%25==0):
-                bbox, label, conf = cv.detect_common_objects(frame, confidence=0.25, model='yolov3-tiny')            
-                self.car_count += label.count('car')+label.count('truck')+label.count('motorcycle')+label.count('bus')
-            frame_count+=1
+            if frame_count % 25 == 0:
+                bbox, label, conf = cv.detect_common_objects(frame, confidence=0.25, model='yolov3-tiny')
+                self.car_count += label.count('car') + label.count('truck') + label.count('motorcycle') + label.count('bus')
+                if 'ambulance' in label or 'fire truck' in label or 'police car' in label:
+                    self.emergency_present = True
+
+                # ✅ Stop early to keep car count around 20
+                if self.car_count >= 20:
+                    break
+            frame_count += 1
 
         clip.close()
 
@@ -52,17 +59,26 @@ class VideoProcessor(threading.Thread):
 
 def main():
     global k
-    st.title("Smart Traffic Management System")
+    st.set_page_config(page_title="Smart Traffic Management", layout="wide")
+    st.markdown("<h1 style='text-align: center; color: teal;'>🚦 Smart Traffic Management System</h1>", unsafe_allow_html=True)
 
-    video_paths = [ "Images/rushS.mp4", "Images/vehicle.mp4", "Images/rush.mp4", "Images/surveillance.m4v"]
+    # Sidebar
+    st.sidebar.header("Simulation Controls")
+    run_simulation = st.sidebar.button("▶️ Run Traffic Simulation")
+    st.sidebar.info("This system detects traffic density and emergency vehicles to optimize signal flow.")
+
+    # Video paths
+    video_paths = ["Images/rushS.mp4", "Images/vehicle.mp4", "Images/rush.mp4", "Images/surveillance.m4v"]
     sides = ["North", "West", "East", "South"]
 
     if len(video_paths) != len(sides):
         st.error("Number of video paths and sides should be the same.")
         return
-    # Display videos
+
     cols1, cols2, cols3 = st.columns(3), st.columns(3), st.columns(3)
 
+    # Display video feeds
+    st.subheader("Live Camera Feeds")
     for i, video_path in enumerate(video_paths):
         if i == 0:
             cols1[1].video(video_path)
@@ -72,67 +88,65 @@ def main():
             cols2[2].video(video_path)
         else:
             cols3[1].video(video_path)
-    
 
-    if len(video_paths) != len(sides):
-        st.error("Number of video paths and sides should be the same.")
-        return
-    p1,p2,p3,p4=st.empty(),st.empty(),st.empty(),st.empty()        
+    # Simulation
+    if run_simulation:
+        progress = st.progress(0)
+        status = st.empty()
+        p1, p2, p3, p4 = st.empty(), st.empty(), st.empty(), st.empty()
 
-    for _ in range(4):  # Run for 40 seconds with light adjustment every 10 seconds
-        # Create VideoProcessor instances for each video
-        k=_*10
-        
-        car_counts = [0,0,0,0]
-        video_processors = [VideoProcessor(video_path, side) for video_path, side in zip(video_paths, sides)]
-        for video_processor in video_processors:
-            video_processor.start()
+        for round_num in range(4):
+            k = round_num * 10
+            car_counts = [0, 0, 0, 0]
+            emergency_detected = False
+            emergency_side = None
 
-        time.sleep(10)  # Wait for 10 seconds
-        image_visible = False
-        p1.empty()
-        p2.empty()
-        p3.empty()
-        p4.empty()
+            video_processors = [VideoProcessor(video_path, side) for video_path, side in zip(video_paths, sides)]
+            for vp in video_processors:
+                vp.start()
 
-        # Stop all VideoProcessor instances
-        for video_processor in video_processors:
-            video_processor.stop()
+            status.info(f"Processing round {round_num + 1}/4...")
+            time.sleep(10)
+            progress.progress((round_num + 1) / 4)
 
-        # Wait for all threads to finish
-        for video_processor in video_processors:
-            video_processor.join()
+            for vp in video_processors:
+                vp.stop()
+            for vp in video_processors:
+                vp.join()
 
-        # Get car counts from all video processors
-        car_counts = [video_processor.car_count for video_processor in video_processors]
-        print(car_counts)
+            for i, vp in enumerate(video_processors):
+                car_counts[i] = vp.car_count
+                if vp.emergency_present:
+                    emergency_detected = True
+                    emergency_side = vp.side
+                    break
 
-        # Determine the side with the most traffic
-        most_traffic_index = car_counts.index(max(car_counts))
-
-        st.write("{} side has the most traffic.".format(sides[most_traffic_index]))
-        st.write("Adjusting traffic lights accordingly...")
-        dir=sides[most_traffic_index]
-        image_visible=True
-        # Function call for Trafic lights
-        if dir == 'North':
-            sig=['Images/greenN.png','Images/redW.png','Images/redE.png','Images/redS.png']
-        if dir == 'West':
-            sig=['Images/redN.png','Images/greenW.png','Images/redE.png','Images/redS.png']
-        if dir == 'East':
-            sig=['Images/redN.png','Images/redW.png','Images/greenE.png','Images/redS.png']
-        if dir == 'South':
-            sig=['Images/redN.png','Images/redW.png','Images/redE.png','Images/greenS.png']
-        for i, img in enumerate(sig):
-            if i == 0:
-                p1=cols3[2].image(img, width=80)
-            elif i == 1:
-                p2=cols1[2].image(img, width=100)
-            elif i == 2:
-                p3=cols3[0].image(img, width=100)
+            if emergency_detected:
+                st.error(f"🚑 Emergency detected on {emergency_side}! Giving priority.")
+                dir = emergency_side
             else:
-                p4=cols1[0].image(img, width=80)
+                most_traffic_index = car_counts.index(max(car_counts))
+                dir = sides[most_traffic_index]
+
+            # Display traffic data table
+            data = pd.DataFrame({
+                "Side": sides,
+                "Number of Vehicles": car_counts,
+                "Traffic Light": ["🟢 Green" if side == dir else "🔴 Red" for side in sides]
+            })
+
+            st.markdown("### 🚘 Traffic Analysis Table")
+            st.dataframe(data, use_container_width=True)
+
+            # Bar chart
+            st.markdown("### 📊 Vehicle Count Chart")
+            st.bar_chart(pd.DataFrame({'Vehicles': car_counts}, index=sides))
+
+            # Show signal lights
+            with st.expander("🚦 View Traffic Lights"):
+                Light(dir, cols1, cols2, cols3)
+
+            st.success(f"✅ {dir} has the green light based on current traffic conditions.")
 
 if __name__ == "__main__":
     main()
-
