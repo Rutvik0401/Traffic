@@ -8,9 +8,19 @@ import tempfile
 from cvlib.object_detection import detect_common_objects
 from moviepy.editor import VideoFileClip
 
-# AWS S3 Config
-s3 = boto3.client('s3')
-S3_BUCKET = "smart-traffic-data"
+# AWS S3 Config (Securely loaded from Streamlit secrets)
+AWS_ACCESS_KEY_ID = st.secrets["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = st.secrets["AWS_SECRET_ACCESS_KEY"]
+AWS_DEFAULT_REGION = st.secrets["AWS_DEFAULT_REGION"]
+S3_BUCKET = st.secrets["S3_BUCKET"]
+
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_DEFAULT_REGION
+)
+
 S3_VIDEO_KEYS = [
     "videos/rushS.mp4", "videos/vehicle.mp4",
     "videos/rush.mp4", "videos/surveillance.m4v"
