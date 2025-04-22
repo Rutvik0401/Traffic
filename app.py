@@ -1,11 +1,11 @@
 import streamlit as st
+import cv2
+import cvlib as cv
 import threading
 import time
 import pandas as pd
-import cvlib as cv  # Keeping cvlib for object detection
 from cvlib.object_detection import detect_common_objects
 from moviepy.editor import VideoFileClip
-import random  # Simulating car counts for demonstration
 
 def Light(dir, cols1, cols2, cols3):
     signals = {
@@ -41,6 +41,9 @@ class VideoProcessor(threading.Thread):
         frame_count = 0
 
         for frame in cap.iter_frames():
+            if self.car_count >= 30:  # Stop if car count exceeds 50
+                break
+            
             if frame_count % 25 == 0:
                 bbox, label, conf = cv.detect_common_objects(frame, confidence=0.25, model='yolov3-tiny')
                 self.car_count += label.count('car') + label.count('truck') + label.count('motorcycle') + label.count('bus')
