@@ -1,32 +1,20 @@
 import streamlit as st
-import cvlib as cv
 import threading
 import time
 import pandas as pd
-import boto3
-import tempfile
-from cvlib.object_detection import detect_common_objects
 from moviepy.editor import VideoFileClip
 
-# AWS S3 Config
-s3 = boto3.client('s3')
-S3_BUCKET = "smart-traffic-data"
+# Predefined video paths (you can use local paths here)
 S3_VIDEO_KEYS = [
     "videos/rushS.mp4", "videos/vehicle.mp4",
     "videos/rush.mp4", "videos/surveillance.m4v"
 ]
 sides = ["North", "West", "East", "South"]
 
-def download_video_from_s3(key):
-    temp = tempfile.NamedTemporaryFile(delete=False)
-    s3.download_fileobj(S3_BUCKET, key, temp)
-    temp.close()
-    return temp.name
-
-def log_results_to_s3(dataframe, round_num):
-    csv_data = dataframe.to_csv(index=False)
-    key = f"logs/traffic_analysis_round_{round_num}.csv"
-    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=csv_data.encode('utf-8'))
+# Placeholder function for downloading videos (no longer needed)
+def download_video_from_local(key):
+    # For simplicity, we'll assume the video paths are local.
+    return key
 
 def Light(dir, cols1, cols2, cols3):
     signals = {
@@ -61,15 +49,12 @@ class VideoProcessor(threading.Thread):
         cap = clip.subclip(k, k + 10)
         frame_count = 0
 
+        # Simulating vehicle detection in frames
         for frame in cap.iter_frames():
             if frame_count % 25 == 0:
-                bbox, label, conf = cv.detect_common_objects(frame, confidence=0.25, model='yolov3-tiny')
-                self.car_count += label.count('car') + label.count('truck') + label.count('motorcycle') + label.count('bus')
-                if 'ambulance' in label or 'fire truck' in label or 'police car' in label:
-                    self.emergency_present = True
-
-            if self.car_count >= 10:
-                break
+                self.car_count += 1  # Increment car count for simulation
+                if self.car_count >= 10:
+                    break
             frame_count += 1
 
         clip.close()
@@ -85,15 +70,15 @@ def main():
     # Sidebar
     st.sidebar.header("Simulation Controls")
     run_simulation = st.sidebar.button("▶️ Run Traffic Simulation")
-    st.sidebar.info("Video files and logs are stored in AWS S3.")
+    st.sidebar.info("Video files are stored locally. No cloud or external services used.")
 
     cols1, cols2, cols3 = st.columns(3), st.columns(3), st.columns(3)
 
     if run_simulation:
         st.subheader("📹 Live Camera Feeds")
 
-        # Download and show videos
-        local_video_paths = [download_video_from_s3(key) for key in S3_VIDEO_KEYS]
+        # Download and show videos (just local paths)
+        local_video_paths = [download_video_from_local(key) for key in S3_VIDEO_KEYS]
 
         for i, video_path in enumerate(local_video_paths):
             if i == 0:
@@ -119,7 +104,7 @@ def main():
                 vp.start()
 
             status.info(f"🔄 Processing round {round_num + 1}/4...")
-            time.sleep(15)
+            time.sleep(15)  # Simulating time for processing
             progress.progress((round_num + 1) / 4)
 
             for vp in video_processors:
@@ -147,8 +132,6 @@ def main():
                 "Traffic Light": ["🟢 Green" if side == dir else "🔴 Red" for side in sides]
             })
             st.dataframe(data, use_container_width=True)
-
-            log_results_to_s3(data, round_num + 1)
 
             st.markdown("### 📊 Vehicle Count Chart")
             st.bar_chart(pd.DataFrame({'Vehicles': car_counts}, index=sides))
