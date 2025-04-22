@@ -1,4 +1,5 @@
 import streamlit as st
+import cv2
 import cvlib as cv
 import threading
 import time
