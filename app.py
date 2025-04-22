@@ -46,10 +46,6 @@ class VideoProcessor(threading.Thread):
                 self.car_count += label.count('car') + label.count('truck') + label.count('motorcycle') + label.count('bus')
                 if 'ambulance' in label or 'fire truck' in label or 'police car' in label:
                     self.emergency_present = True
-
-                # ✅ Stop early to keep car count around 20
-                if self.car_count >= 20:
-                    break
             frame_count += 1
 
         clip.close()
