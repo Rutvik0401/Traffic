@@ -1,5 +1,4 @@
 streamlit
-opencv-python
 opencv-contrib-python
 opencv-contrib-python-headless
 cvlib
