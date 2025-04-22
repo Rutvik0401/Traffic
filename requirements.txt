@@ -1,0 +1,10 @@
+streamlit
+opencv-python
+opencv-contrib-python
+opencv-contrib-python-headless
+cvlib
+opencv-python-headless
+numpy
+pillow
+moviepy
+tensorflow
