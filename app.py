@@ -1,11 +1,11 @@
 import streamlit as st
-import cv2
-import cvlib as cv
 import threading
 import time
 import pandas as pd
+import cvlib as cv  # Keeping cvlib for object detection
 from cvlib.object_detection import detect_common_objects
 from moviepy.editor import VideoFileClip
+import random  # Simulating car counts for demonstration
 
 def Light(dir, cols1, cols2, cols3):
     signals = {
